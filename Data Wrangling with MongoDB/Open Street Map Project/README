@@ -1,1 +1,61 @@
 I passed this project on Jan 3rd. I upload my project to record my work and inspire others.
+
+Libraries Required
+*************************************************************************************************************
+* pandas
+* numpy
+* re
+* csv
+* xml.etree.cElementTree
+* collections
+* sqlite3
+
+Code Files
+*************************************************************************************************************
+
+Data Sample Obtain File
+*****************************
+* getsample.py
+
+Data Statistic File -- observe 'k' value and the number of unique 'k', the number of unique users, count different tags.
+*****************************
+* statistic.py
+
+Data Audit File -- find problems of street name and postcode.
+*****************************
+* audit.py
+
+Transfer XML File Into CSV -- when running this file, a folder named "csv files" should be in the root directory，and csv files will save in this folder.
+*****************************
+* xml_to_csv.py
+
+Problem Revision File -- revise problems of street name and postcode.
+*****************************
+* update_csv.py
+
+Create Database
+*****************************
+* save_to_database.py
+
+SQL Query
+*****************************
+* sql_query.py
+
+
+How to Run
+*****************************
+* Example: python3 audit.py
+
+Notice
+*************************************************************************************************************
+1. Whole dataset I used is a part of Los Angeles map, which was extracted on website MapZen. I chose Los Angeles because I am a student of UCLA who wants to know more about this city. The reason why I extracted a part of it is that the whole map of Los Angeles is around 8G, which is hard to use my own computer to finish the task. However, the region I chose includes UCLA and some busy areas;so I think it can be a representative of Los Angeles.
+The URL: https://mapzen.com/data/metro-extracts/your-extracts/0b2605ecf6fa.
+
+2. Reference:
+https://gist.github.com/carlward/54ec1c91b62a5f911c42#file-sample_project-md
+https://mapzen.com
+http://www.cnblogs.com/luhuajun/p/7977561.html
+the codes provided on Udacity Website.
+
+
+3. The sample data in this folder is too small to show all the problems I found with the data I extracted, so when running audit.py, some of the results may be empty.
