@@ -1,0 +1,8 @@
+In this project, I explored and visualized what I found from dataset--Financial Contributions to 2016 Presidential Campaign 
+by California. I applied some important packages to analyze data, such as ggplot2, dplyr, lubridate and so on.
+
+Reference:
+https://github.com/seifip/udacity-data-analyst-nanodegree/tree/master/P4%20-%20Explore%20and%20Summarize%20Data
+https://github.com/susanli2016/udacity-data-analyst/blob/master/p4/Financial_Contribution_to_2016_Presidential_Campaign_MA.Rmd
+http://www.cookbook-r.com/Graphs/Bar_and_line_graphs_(ggplot2)/
+http://blog.csdn.net/bone_ace/article/details/47284805
