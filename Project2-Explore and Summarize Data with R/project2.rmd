@@ -1,0 +1,1105 @@
+Wandi Cui
+========================================================
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+# Load all of the packages that you end up using in your analysis in this code
+# chunk.
+
+# Notice that the parameter "echo" was set to FALSE for this code chunk. This
+# prevents the code from displaying in the knitted HTML output. You should set
+# echo=FALSE for all code chunks in your file, unless it makes sense for your
+# report to show the code that generated a particular plot.
+
+# The other parameters for "message" and "warning" should also be set to FALSE
+# for other code chunks once you have verified that each plot comes out as you
+# want it to. This will clean up the flow of your report.
+
+library(ggplot2)
+library(gridExtra)
+library(gender)
+library(dplyr)
+library(data.table)
+library(lubridate)
+library(stringr)
+```
+
+
+```{r echo=FALSE, Load_the_Data}
+# Load data and revise the format.
+CA = fread("CA_Contribution.csv",fill = TRUE)
+CA = subset(CA,select = -V19)
+summary(CA)
+
+#Omitt contributions above the $2,700 FEC limit and omitt refunds(negative contributions)
+CA_clean = subset(CA,(contb_receipt_amt > 0) & (contb_receipt_amt <= 2700))
+summary(CA_clean)
+```
+This is an exploration of 2016 US presidential campaign donations in the state \
+of California. The dataset contains financial contribution transaction \
+from 2013 to 2016.
+
+Observing the data, I found that some of the data of contribution amount is \
+negative, which I believed was refund. Some other data of contribution amount \
+is or more than $2700, (the limitaition of the donation), which will be \
+refunded. Therefore, I cleaned the data by omitting these invalid data. 
+
+# Univariate Plots Section
+
+```{r echo=FALSE, Univariate_Plots1}
+
+# Plot density of the amount of contribution
+bks = seq(0,2700, 200)
+ggplot(aes(x = contb_receipt_amt), data = CA_clean) +
+  geom_density(color = "blue", fill = "blue") +
+  scale_x_continuous(breaks = bks) +
+  xlab("The Amount of Contribution") +
+  ggtitle('Density of the Contribution') +
+  theme(plot.title = element_text(hjust = 0.5)) 
+  
+# boxplot of contribution amounts
+ggplot(aes(x = 1, y = contb_receipt_amt), data = CA_clean) +
+  geom_boxplot() +
+  ylab("The Amount of Contribution")
+
+# Plot histogram of the amount of contribution
+bks = seq(0,2700, 200)
+ggplot(aes(x = contb_receipt_amt), data = CA_clean) +
+  geom_histogram(binwidth = 100, fill = "gold") +
+  scale_x_continuous(breaks = bks) +
+  xlab("The Amount of Contribution")
+  ggtitle('Histogram of the Contribution') +
+  theme(plot.title = element_text(hjust = 0.5))
+  
+```
+
+Analyzing the distribution of contribution amount (contbr_receipt_amt \
+in the dataset), it shows that the median of one-time donation is \$27, \
+while the most frequent amount of donation is \$25, followed by \$50 and \$100. \
+Most of the contribution record is no more than \$200.
+
+```{r echo=FALSE, Univariate_Plots2}
+# plot contribute city
+#city = unique(CA_clean$contbr_city)
+city_group = group_by(CA_clean,contbr_city)
+city_df = summarise(city_group,
+                    city_count = n())
+#clean city data frame
+city_df = subset(city_df, str_detect(contbr_city, pattern = "^\\w"))
+#top 10 contribute cities
+city_df = head(arrange(city_df, desc(city_count)), n = 10)
+ggplot(aes(x = reorder(contbr_city, desc(city_count)), y = city_count),
+       data = city_df) +
+  geom_bar( stat = 'identity', width = 0.5) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.8, vjust = 0.7)) +
+  #scale_fill_discrete(name = "City") +
+  guides("False") +
+  xlab("City") +
+  ylab("The Number of Records") +
+  geom_text(aes(label = city_count, vjust = -0.8, hjust = 0.5), 
+            show.legend = FALSE) +
+  ylim(min(city_df$city_count, 0) * 1.1, max(city_df$city_count) * 1.1) +
+  ggtitle("Top 10 Cities Having Most Contribution Records") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+To clean the data related to contributing city, I only kept the records of \
+column contbr_city in original dataset that begining with alpha and without \
+digit or other character like "#", "." and so on. Observing the data of \
+contributing city, I got the top 10 cities that have most contribution records. \
+The bar chart illustrates that 97766 contributions made in Los Angeles, \
+followd by San Francisco (86453) and San Diego(43720).
+
+```{r echo=FALSE, Univariate_Plots3}
+#get unique candidates
+candidates = unique(CA_clean$cand_nm)
+#length(candidates)
+#EDA by candidates
+candidate_group = group_by(CA_clean,cand_nm)
+contr_by_candidates = summarise(candidate_group,
+                               sum_contr_candidate = sum(contb_receipt_amt),
+                               number_of_contributor = n_distinct(contbr_nm),
+                               number_of_contr_records = n())
+
+#plot the top 5 candidates who had most contribution records
+contr_by_candidates_record = head(arrange(contr_by_candidates,
+                                          desc(number_of_contr_records)), 
+                                  n = 5)
+ggplot(aes(x = reorder(cand_nm, desc(number_of_contr_records)),
+           y = number_of_contr_records), data = contr_by_candidates_record) +
+  geom_bar(stat = "identity", width = 0.3) +
+  theme(axis.text.x = element_text(size = 8)) +
+  geom_text(aes(label = number_of_contr_records, vjust = -0.8, hjust = 0.5,
+                show.legend = FALSE)) +
+  guides(fill = FALSE) +
+  xlab("Candidate") +
+  ylab("The Number of Contribution Records") +
+  ylim(min(contr_by_candidates$number_of_contr_records, 0) * 1.1, 
+       max(contr_by_candidates$number_of_contr_records) *1.1) +
+  ggtitle("The Number of Contribution Records For Top 5 Candidates") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+#separate different candidates in different party.
+Democrat = c("Clinton, Hillary Rodham","Sanders, Bernard",
+             "O'Malley, Martin Joseph","Webb, James Henry Jr.",
+             "Lessig, Lawrence")
+Republican = c("Trump, Donald J.","Santorum, Richard J.",
+               "Cruz, Rafael Edward 'Ted'","Walker, Scott","Bush, Jeb",
+               "Rubio, Marco","Kasich, John R.","Christie, Christopher J.",
+               "Paul, Rand","Fiorina, Carly","Jindal, Bobby","Huckabee, Mike",
+               "Pataki, George E.","Carson, Benjamin S.","Graham, Lindsey O.",
+               "Perry, James R. (Rick)","Gilmore, James S III")
+Libertarian = c("Johnson, Gary")
+Green_Party = c("Stein, Jill")
+Independent = c("McMullin, Evan")
+
+#add a new column "cand_party" -- Democratic,Republican,Others 
+CA_clean$cand_party = ifelse(CA_clean$cand_nm %in% Democrat, 
+                             "Democratic","Republican")
+CA_clean$cand_party[CA_clean$cand_nm %in% 
+                    c(Libertarian,Green_Party,Independent)] = "Others"
+
+# Plot the number of contribution records by party
+party_group = group_by(CA_clean, cand_party)
+contr_by_party = summarise(party_group,
+                           sum_contr_party = sum(contb_receipt_amt),
+                           number_of_candidate = length(unique(cand_id)), 
+                           avg_contr_party = sum_contr_party / 
+                                             number_of_candidate, 
+                           number_of_donor = n_distinct(contbr_nm),
+                           number_of_contr_records = n())
+
+ggplot(aes(x = cand_party, y = number_of_contr_records), data = contr_by_party) +
+  geom_bar(stat = "identity", width = 0.3) +
+  geom_text(aes(label = number_of_contr_records,vjust = -0.8, hjust = 0.5,
+                show.legend = FALSE)) +
+  guides(fill = FALSE) +
+  xlab("Party") +
+  ylab("The Number of Records") +
+  ylim(min(contr_by_party$number_of_contr_records, 0) * 1.1,
+       max(contr_by_party$number_of_contr_records) *1.1) +
+  ggtitle("The Number of Contribution Records For Each Party") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Analyzing the data related to candidate (variable: cand_nm), there are 25 \
+candidates attending the presidential election; however the contribution they \
+got was significantly different. The bar chart illustrates the top 5 candidates \
+who had most contribution records in dataset. Obviously, Hillary Clinton won \
+the first place, followed by Bernard Sander and Donald Trump.
+
+
+The Candidate's party affiliation is an important feature for the results of \
+election, which is not included in the original dataset. Therefore, I added an \
+extra variable "cand_party" to the dataset representing the candidate's party \
+affilliation. Then, I found that there were 5 candidates from Democratic party, \
+17 candidates from Republican party and 3 candidates from other party. \
+I found the top five candidates who had most contribution records and ploted \
+a bar chart. It shows that Hilliary Clinton ranked first place with 655622 \
+records, followed by Bernard Sanders with 387451 records and Donald Trump \
+with 80714 records. 
+
+```{r echo=FALSE, Univariate_Plots4}
+#guess gender of contributors by their first name
+CA_clean$contbr_first_nm = sub(" .*", "", sub(".*, ", "", CA_clean$contbr_nm))
+
+#method = ssa: United States from 1930 to 2012. 
+#Drawn from Social Security Administration data.
+#return a data frame with name and gender propostion in certain year.
+
+gender_df = gender(CA_clean$contbr_first_nm, method = 'ssa', c(1920, 1997))
+gender_df = unique(gender_df)
+
+#name the first colunm of gender data frame "contbr_first_nm" to join two table
+#and predict gender for table CA_clean
+#add new vairable--"gender" to original dataset 
+
+names(gender_df)[1] = 'contbr_first_nm'
+gender_tb = subset(gender_df, select = 
+                     -c(proportion_male,proportion_female,year_min,year_max))
+CA_clean = inner_join(CA_clean, gender_tb, by = 'contbr_first_nm')                    
+
+#EDA by contributors' gender
+gender_group = group_by(CA_clean, gender)
+contr_by_gender = summarise(gender_group, 
+                            sum_contr_gender = sum(contb_receipt_amt),
+                            number_of_contributor = n_distinct(contbr_nm),
+                            number_of_contr_records = n())
+
+#plot the number of contribution records by gender
+ggplot(aes(x = gender, y = number_of_contr_records), data = contr_by_gender) +
+  geom_bar(stat = "identity", width = 0.3) +
+  geom_text(aes(label = number_of_contr_records, vjust = -0.8, hjust = 0.5,
+                show.legend = FALSE))+
+  guides(fill = FALSE) +
+  ylab("The Number of Records") +
+  ylim(min(contr_by_gender$number_of_contr_records, 0) *1.1, 
+       max(contr_by_gender$number_of_contr_records) *1.1) +
+  ggtitle("The Number of Contribution Records by gender") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Male and female may have different opinions when selecting the president, so I \
+added variable "gender" to the dataset by applying function gender(), which \
+can predict gender of the donor with their first name. The data shows that \
+in California contribution records by female is nearly 16% more than those \
+by male.
+
+
+```{r echo=FALSE, Univariate_Plots5}                         
+#EDA by occupation
+occupation_group = subset(group_by(CA_clean,contbr_occupation),
+                          !(contbr_occupation %in% 
+                              c("INFORMATION REQUESTED",
+                                "INFORMATION REQUESTED PER BEST EFFORTS",
+                                "N/A","")))
+
+contr_by_occupation = summarise(occupation_group,
+                                sum_contr_occupation = sum(contb_receipt_amt),
+                                number_of_contributor = n_distinct(contbr_nm),
+                                number_of_contr_records = n(),
+                                avg_contr_occupation = 
+                                  sum_contr_occupation / number_of_contributor)
+
+#unique(occupation_group$contbr_occupation)
+
+#top 10 occupations that made most contribution records
+contr_by_occupation_record = head(arrange(contr_by_occupation,
+                                          desc(number_of_contr_records)), 
+                                  n = 10)
+
+ggplot(aes(x = reorder(contbr_occupation, desc(number_of_contr_records)),
+           y = number_of_contr_records),
+       data = contr_by_occupation_record) +
+  geom_bar(stat = 'identity', width = 0.5) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.8, vjust = 0.7)) +
+  geom_text(aes(label = number_of_contr_records),
+            vjust = -0.4, size = 3, show.legend = FALSE) +
+  ylim(min(contr_by_occupation_record$number_of_contr_records, 0) * 1.1,
+       max(contr_by_occupation_record$number_of_contr_records * 1.1)) +
+  xlab('Top 10 Occupations') +
+  ylab('Sum of Contribution Records') +
+  guides(fill = FALSE) +
+  ggtitle('The Number of Contribution Records by Occupation') +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Focusing on the data related to occupation, through the bar chart, we can see \
+that retired people contributed the most to the election, followed by people \
+who were not employed and attorney. Specifically, the number of contribution \
+records by retired people is more than double of it by people who were not \
+employed.
+
+```{r echo=FALSE, Univariate_Plots6}
+#contribute date plot
+#standarize date
+#  %b: abbreviated month;
+#  as.Date() can transfer original date format into "yyyy-mm-dd" 
+#  but original format should be provided
+
+CA_clean$contb_receipt_dt = as.Date(CA_clean$contb_receipt_dt,
+                                    format = "%d-%b-%y")
+
+#add new variables -- contribute year and month
+CA_clean$contbr_year = year(CA_clean$contb_receipt_dt)
+CA_clean$contbr_month = month(CA_clean$contb_receipt_dt)
+CA_clean$contbr_year_month = paste(as.character(CA_clean$contbr_year), "-", as.character(CA_clean$contbr_month))
+
+date_group = group_by(CA_clean,contbr_year)
+contr_by_date = summarise(date_group,
+                          sum_contr_year = sum(contb_receipt_amt),
+                          number_of_contributor = n_distinct(contbr_nm),
+                          number_of_contr_records = n())
+ggplot(data = contr_by_date,
+       aes(x = contbr_year, y = number_of_contr_records)) +
+  geom_line() + 
+  geom_text(aes(label = number_of_contr_records),
+            vjust = -1, hjust = 0.8,  size = 3) +
+  ylim(min(contr_by_date$number_of_contr_records, 0) * 1.3,
+       max(contr_by_date$number_of_contr_records) * 1.3) +
+  xlab('Year') +
+  ylab('The Number of Contribution Record') +
+  geom_point() +
+  ggtitle("Time Series of the Number of Contribution Records")
+
+```
+
+To analyze when did people donate their money, I added a new variable \
+"contbr_year" to see how many contribution records were in each year \
+from 2013 to 2016. The line chart illustrates that people tend to donate money \
+when the election was getting finished. Only one record took place in 2013, \
+while the number increased to 133562 in 2015 and then growed dramatically \
+in 2016 to 1104701, more than 8 times of the number in 2015.
+
+# Univariate Analysis
+
+### What is the structure of your dataset?
+
+First, for the dataset of 2016 US presidential campaign donations in \
+the state of California, there are 1304346 contributions and 18 variables. \
+The variables that I think might be useful to explore potential knowledge of \
+data are as follows:
+
+
+  * cand_nm: Candidate's name
+  
+  
+  * contbr_nm: Contributor's name
+  
+  
+  * contbr_city: The city that contributor lives in 
+  
+  
+  * contbr_occupation: Contributors' occupation
+  
+  
+  * contb_receipt_amt: The amount of contribution
+  
+  
+  * contb_receipt_dt: Contribution date
+  
+  
+Other observations of this dataset:
+
+
+  * One may donate multiple times, so that is why in this section I only \
+  explored the contribution records related to the variables mentioned above.
+  
+  
+  * The median of one-time contribution is $27; and the minimum donation is \
+  $0.01, while the maximum donation is $2700. (except those who donated more \
+  than the limitation $2700)
+  
+  
+  * The democratic party only has 5 candidates compared to 17 candidates \
+  from the republian party.
+  
+  
+  * People in Los Angeles contributed the most in California.
+  
+  
+  * Contribution records related to female is 16 percentage more than male.
+  
+  
+  * Retired people make the most amount of donations.
+  
+  
+  * People tended to donate money near election closing time.
+
+### What is/are the main feature(s) of interest in your dataset?
+
+The main features in the dataset are candidate, candidate party affilliation, \
+contribution amount. I would like to explore potential knowledge of data and \
+I also think that a regression model of predicting which party a donor will \
+donate could be built with variables in the dataset and some additional \
+variables I can get.
+
+### What other features in the dataset do you think will help support your \
+investigation into your feature(s) of interest?
+
+In my opiniion, donor's occupation and gender, contribution time and location \
+are likely to influence the amount of contribution and the party that a donor \
+supported. In my speculation, occupation is an important feature that can in \
+some degree determine the amount of contribution of someone and the \
+contribution party; location is another key feature that probably determine \
+the contriution party.
+
+### Did you create any new variables from existing variables in the dataset?
+
+I created four new variables:
+
+
+  * cand_party: candidates' party affilliation
+  
+  
+  * contbr_first_nm: contributor's first name
+  
+  
+  * gender: contributor's gender
+  
+  
+  * contbr_year: the contribution year
+
+### Of the features you investigated, were there any unusual distributions? \
+Did you perform any operations on the data to tidy, adjust, or change the form \
+of the data? If so, why did you do this?
+
+I found that some of the data of contribution amount is negative, which \
+I believed was refund. Some other data of contribution amount is or \
+more than $2700, (the limitaition of the donation), which will be refunded. \
+Therefore, I ommited these invalid data. When observing the relationship of \
+occupation and contribution, I found some records did not offer valid \
+occupation information like "INFORMATION REQUESTED", \
+"INFORMATION REQUESTED PER BEST EFFORTS","N/A" or empty; \
+so I removed these records when analyzing data.
+
+# Bivariate Plots Section
+
+```{r echo=FALSE, Bivariate_Plots1}
+#Relationship between Party and Candidate
+
+#Relationship between Party and Contribution Amount# 
+#bar chart
+ggplot(aes(x = cand_party, y = sum_contr_party), data = contr_by_party) +
+  geom_bar(stat = 'identity', width = 0.4) +
+  geom_text(aes(label = sum_contr_party, vjust = -0.8, hjust = 0.5),
+                show.legend = FALSE) +
+  ylim(min(contr_by_party$sum_contr_party, 0) * 1.1,
+       max(contr_by_party$sum_contr_party) * 1.1) +
+  guides(fill = FALSE) +
+  xlab('Party') +
+  ylab('Sum of Contribution') +
+  ggtitle('Total Amount of Contribution by Party') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+#pie chart
+myLabel = as.vector(contr_by_party$cand_party)   
+myLabel = paste(myLabel, "(", round(contr_by_party$sum_contr_party / sum(contr_by_party$sum_contr_party) * 100, 2), "%)", sep = "")   
+
+ggplot(aes(x = "", y = sum_contr_party, fill = cand_party),
+       data = contr_by_party) +
+  geom_bar(stat = "identity", width = 1) +    
+  coord_polar(theta = "y") + 
+  labs(x = "", y = "", title = "") + 
+  theme(axis.ticks = element_blank()) + 
+  scale_fill_discrete(name = "Party", breaks = contr_by_party$cand_party,
+                      labels = myLabel) + 
+  theme(axis.text.x = element_blank()) +
+  ggtitle("The Percentage of Contribution Amount by Party")
+
+#Relationship between Party and the number of Donors
+#(unique donors, not contribution records)
+
+#bar chart
+ggplot(aes(x = cand_party, y = number_of_donor), data = contr_by_party) +
+  geom_bar(stat = 'identity', width = 0.4) +
+  geom_text(aes(label = number_of_donor, vjust = -0.8, hjust = 0.5),
+                show.legend = FALSE) +
+  ylim(min(contr_by_party$number_of_donor, 0) * 1.1,
+       max(contr_by_party$number_of_donor) * 1.1) +
+  guides(fill = FALSE) +
+  xlab('Party') +
+  ylab('Number of Donors') +
+  ggtitle('Total Number of Donors by Party') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+#pie chart
+myLabel = as.vector(contr_by_party$cand_party)   
+myLabel = paste(myLabel, "(", round(contr_by_party$number_of_donor / sum(contr_by_party$number_of_donor) * 100, 2), "%)", sep = "")   
+
+ggplot(aes(x = "", y = number_of_donor, fill = cand_party),
+       data = contr_by_party) +
+  geom_bar(stat = "identity", width = 1) +    
+  coord_polar(theta = "y") + 
+  labs(x = "", y = "", title = "") + 
+  theme(axis.ticks = element_blank()) + 
+  scale_fill_discrete(name = "Party", breaks = contr_by_party$cand_party,
+                      labels = myLabel) + 
+  theme(axis.text.x = element_blank()) +
+  ggtitle("The Percentage of Donors by Party") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+Since candidates' party affilliation is a key feature to analyze, I explored \
+the relashionship between candidates' party affilliation with other \
+valuable features. First, there are 17, 5 and 3 candidates from \
+Republican party, Democratic party and other party respectively. \
+Republican candidates occupy 68% of the total number of candidates; \
+however, the data shows that Demorcratic candidates obtained more donation \
+than other candidates even though Republican has quantity advantage.\
+The bar chart and pie chart illustrate that Democratic party got $110913477.09, \
+accounting for 74.77% of the total donation in California. \
+Observing the dataset, I found that one person may donated multiple times, \
+so I decided to consider the number of donor by party. The data shows that \
+Democratic party had 141935 donors, around 75% more than Republican party had.
+
+```{r echo=FALSE, Bivariate_Plots2}
+#Relationship between Candidate and Contribution Amount
+
+#Top 5 candidates who got most contribution
+contr_by_candidates_sum = head(arrange(contr_by_candidates,
+                                       desc(sum_contr_candidate)), n = 5)
+
+ggplot(aes(x = reorder(cand_nm, desc(sum_contr_candidate)),
+           y = sum_contr_candidate), data = contr_by_candidates_sum) +
+  geom_bar(stat = "identity", width = 0.4) +
+  theme(axis.text.x = element_text(size = 8)) +
+  geom_text(aes(label = sum_contr_candidate, vjust = -0.8, hjust = 0.5,
+                show.legend = FALSE)) +
+  guides(fill = FALSE) +
+  xlab('Candidate') +
+  ylab('Amount of Contribution') +
+  ylim(min(contr_by_candidates_sum$sum_contr_candidate, 0) * 1.1, max(contr_by_candidates_sum$sum_contr_candidate) *1.1) +
+  ggtitle("The Amount of Contrbution For Top 5 Candidates") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+#Relationship between Candidate and the number of Donors
+#top 5 candidates who had most donors
+contr_by_candidates_donor = head(arrange(contr_by_candidates,
+                                         desc(number_of_contributor)), n = 5)
+ggplot(aes(x = reorder(cand_nm, desc(number_of_contributor)),
+           y = number_of_contributor), data = contr_by_candidates_donor) +
+  geom_bar(stat = "identity", width = 0.4) +
+  theme(axis.text.x = element_text(size = 8)) +
+  geom_text(aes(label = number_of_contributor, vjust = -0.8, hjust = 0.5,
+                show.legend = FALSE)) +
+  guides(fill = FALSE) +
+  xlab('Candidate') +
+  ylab('The Number of Donor') +
+  ylim(min(contr_by_candidates_donor$number_of_contributor, 0) * 1.1,
+       max(contr_by_candidates_donor$number_of_contributor) *1.1) +
+  ggtitle("The Number of Donor For Top 5 Candidates") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Exploring the relationship between candidate and the amount of contribution, \
+as well as the number of donors, I found that candidates who got larger \
+amount of donation may had fewer donor. For example, through two bar charts, \
+we can see that Bernard Sanders ranks second place when considering the \
+donation each candidates got; however he had fewer donors than Donald Trump, \
+which means some of his donors may be richer than Donald Trump's. \
+Furthermore, Marco Rubio had fifth supporters whereas the amount of donation \
+he got could not be within the top 5. Gererally, Hillary Clinton got \
+far more donation than other candidates with the figure of $90742475.97, \
+occupying about 61% of the total donation of California; and she also had \
+the most donors amoung all the candidates.
+
+```{r echo = FALSE, Bivariate_Plots3}
+#Relationship between Gender and Contribution Amount
+#the amount of contribution by gender
+ggplot(aes(x = gender, y = sum_contr_gender),
+       data = contr_by_gender, vjust = -0.4) +
+  geom_bar(stat = 'identity', width = 0.3) +
+  geom_text(aes(label = sum_contr_gender), vjust = -0.4) +
+  xlab('Gender') +
+  ylab('The Amount of Contribution') +
+  ylim(min(contr_by_gender$sum_contr_gender, 0) * 1.1,
+       max(contr_by_gender$sum_contr_gender) *1.1) +
+  ggtitle('Total Amount of Contribution by Gender') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+#Relationship between Gender and the number of Donor
+#number of contributors by gender
+ggplot(aes(x = gender, y = number_of_contributor),
+       data = contr_by_gender, vjust = -0.4) +
+  geom_bar(stat = 'identity', width = 0.3) +
+  geom_text(aes(label = number_of_contributor), vjust = -0.4) +
+  xlab('Gender') +
+  ylab('The Number of Donor') +
+  ggtitle('The Number of Donor by Gender') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+#the average amount of contribution by gender
+ggplot(aes(x = gender,
+           y = round(sum_contr_gender / number_of_contributor)),
+       data = contr_by_gender, vjust = -0.4) +
+  geom_bar(stat = 'identity', width = 0.3) +
+  geom_text(aes(label = round(sum_contr_gender / number_of_contributor)),
+            vjust = -0.4) +
+  xlab('Gender') +
+  ylab('The Average Amount of Contribution') +
+  ggtitle('Average Amount of Contribution by Gender') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+In previous section, I mentioned that female had more contribution records \
+than male; however, I found that male in fact donated more money than female \
+with the total contribution of 78363032.26 dollars and 69977401.22 dollars \
+respectively. Besides, the average donation by male and female is around \
+697 and 651 dollars respectively.
+
+```{r echo = FALSE, Bivariate_Plots4}
+#top 10 occupation that donated most
+#bar chart
+contr_by_occupation_sum = head(arrange(contr_by_occupation,
+                                       desc(sum_contr_occupation)), n = 10)
+
+ggplot(aes(x = reorder(contbr_occupation, desc(sum_contr_occupation)),
+           y = sum_contr_occupation),
+       data = contr_by_occupation_sum, vjust = -0.4) +
+  geom_bar(stat = 'identity', width = 0.5) + 
+  #scale_y_log10() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.8, vjust = 0.7)) +
+  geom_text(aes(label = sum_contr_occupation),
+            vjust = -0.4, size = 2.8, show.legend = FALSE) +
+  ylim(min(contr_by_occupation_sum$sum_contr_occupation, 0) * 1.2,
+       max(contr_by_occupation_sum$sum_contr_occupation) * 1.2) +
+  xlab('Top 10 Occupations') +
+  ylab('The Amount of Contribution') +
+  guides(fill = FALSE) +
+  ggtitle('Total Amount of Contribution by Occupation') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+#pie chart
+myLabel = as.vector(contr_by_occupation_sum$contbr_occupation)   
+myLabel = paste(myLabel, "(", 
+                round(contr_by_occupation_sum$sum_contr_occupation /
+                      sum(contr_by_occupation_sum$sum_contr_occupation) * 100,
+                      2), "%)", sep = "")   
+
+ggplot(aes(x = "", y = sum_contr_occupation, fill = contbr_occupation), data = contr_by_occupation_sum) +
+  geom_bar(stat = "identity", width = 1) +    
+  coord_polar(theta = "y") + 
+  labs(x = "", y = "", title = "") + 
+  #theme(axis.ticks = element_blank()) + 
+  theme(legend.position = "right", legend.title = element_text(size = 11)) + 
+  scale_fill_discrete(name = "Occupation", 
+                      breaks = contr_by_occupation_sum$contbr_occupation, 
+                      labels = myLabel) + 
+  theme(axis.text.x = element_blank()) +
+  ggtitle("The Percentage of Contribution Amount by Occupations")
+
+#top 10 occupation that donated most with the average donation
+ggplot(aes(x = reorder(contbr_occupation, desc(avg_contr_occupation)),
+           y = round(avg_contr_occupation)),
+       data = contr_by_occupation_sum, vjust = -0.4) +
+  geom_bar(stat = 'identity', width = 0.5) +
+  geom_text(aes(label = round(avg_contr_occupation),
+                 vjust = -0.4)) +
+  # guides(fill = FALSE) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.8, vjust = 0.7)) +
+
+
+  ylim(min(contr_by_occupation_sum$avg_contr_occupation, 0) * 1.3, max(contr_by_occupation_sum$avg_contr_occupation * 1.3)) +
+  xlab('Top 10 Occupations') +
+  ylab('The Average Amount of Contribution') +
+  ggtitle('Average Amount of Contribution by Occupation') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+Donors' occupation is also a key feature which influences the amount of \
+contribution. I explored top 10 occupations that donated most in the \
+presidential election. It illustrates that retired people contributed the most \
+with 24529708.58 dollars, accounting for nearly 43% of the total, followed by \
+attroney (\$7996430.69) and people who were not employed (\$6192383.72). \
+However, the average donation of these ten occupations is a different picture. \
+Presidents and CEOs had a high average donation amount with around $1509 and 
+\$1501 respectively, ranking the first two places, while homemakers won the \
+third place with the figure of $1119. Not surprisingly, although retired people \
+and people who were not employed made a huge total amount of donation, \
+the average of the donation amount is the lowest amoung these ten occupations.
+
+
+```{r echo = FALSE,Bivariate_Plots5}
+# Relationship between Date and Contribution
+ggplot(data = contr_by_date, aes(x = contbr_year, y = sum_contr_year)) +
+  geom_line() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.8, vjust = 0.7)) +
+  geom_text(aes(label = sum_contr_year), vjust = -1, hjust = 0.8,  size = 3) +
+  ylim(min(contr_by_date$sum_contr_year, 0) * 1.5,
+       max(contr_by_date$sum_contr_year) * 1.5) +
+  xlab('year') +
+  ylab('Sum of Contribution') + 
+  geom_point() +
+  ggtitle("The Amount of Contribution by Date") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+The trend of donation amount by year is similar with the trend of the number of \
+donation records. Most of donations took place in 2015 and 2016.
+
+# Bivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the \
+investigation. How did the feature(s) of interest vary with other features in \
+the dataset?
+
+In this section, I mainly investigated the relationships between those important \
+features mentioned in previous section with the main featrue -- \
+the amount of contribution. My findings are as follows:
+
+
+  * $110913477.09 was donated to Democratic party, accounting for \
+  74.77% of the total donation in California, which is also 3 times of \
+  the figure for Republican party.
+  
+  
+  * The Majority of contributions are recieved by a few candidates.
+  
+  
+  * Hillary Clinton far more donation than other candidates with the figure of \
+  $90742475.97, occupying about 61% of the total donation of California; \
+  and she also had the most donors amoung all the candidates.
+  
+  
+  * In California, male contributed more than female.
+  
+  
+  * Retired People donated the most (nearly 43% of the total) amoung all \
+  occupations even though the average of donation is low. 
+  
+  
+  * Most of the donation took place in 2015 and 2016.
+
+### Did you observe any interesting relationships between the other features \
+(not the main feature(s) of interest)?
+
+There are 17 candidates from Republican party while only 5 candidates from \
+Democratic party; however in California, nearly 3 quarter of the donation is \
+for Democratic party. In addition, candidates who got larger amount of donation \
+may had fewer donor. For example, observing the data, I found that \
+Bernard Sanders ranked second place when considering the donation that \
+each candidates got; however he had fewer donors than Donald Trump, \
+which means some of his donors may be richer than Donald Trump's. \
+Furthermore, Marco Rubio had fifth supporters whereas the amount of donation \
+he got could not be within the top 5. 
+
+### What was the strongest relationship you found?
+
+Democratic party got more donation and supporters than Republican party and \
+other parties in California. Retired people contributed most total amount of \
+donation to the election, and this group of people focused on this campaign \
+most.
+
+# Multivariate Plots Section
+
+```{r echo=FALSE, Multivariate_Plots1}
+# contributions made to each party by top 10 occupations
+top10_occupation = contr_by_occupation_sum$contbr_occupation
+
+party_occupation_contribution = filter(CA_clean,cand_party %in% 
+                               c("Democratic", "Republican") & 
+                               (contbr_occupation %in% top10_occupation)) %>%
+  group_by(cand_party, contbr_occupation) %>%
+  summarise(record_num = n(), sum_contribution = sum(contb_receipt_amt))
+
+# x axes--party(democratic & republican), y axes -- contribution,
+# color -- top 5 occupation who donate most for the party 
+
+ggplot(data = party_occupation_contribution,
+       aes(x = cand_party, y = sum_contribution,
+           fill = reorder(contbr_occupation,
+                          desc(group_by(party_occupation_contribution,
+                                        cand_party)$sum_contribution)))) +
+  geom_bar(stat = "identity", position = position_dodge(), colour = "black") +
+  scale_fill_discrete(name="Occupation") +
+  xlab('Party') +
+  ylab('Amount of Contribution by Top10 Occupation') +
+  theme(axis.title.x = element_text(size = 10)) +
+  theme(axis.title.y =element_text(size = 10)) +
+  ylim(min(party_occupation_contribution$sum_contribution, 0) * 1.2,
+       max(party_occupation_contribution$sum_contribution) * 1.2) +
+  #guides(fill = FALSE) +
+  ggtitle('The Amount of Contribution of Each Party by Occupation') +
+  theme(plot.title = element_text(hjust = 0.5, size = 12))
+
+# candidates(Hillary, Bernald, Trump)  
+candidate_occupation_tb = filter(CA_clean,
+                                 cand_nm %in% c("Clinton, Hillary Rodham",
+                                                "Trump, Donald J.",
+                                                "Sanders, Bernard") & 
+                                 (contbr_occupation %in% top10_occupation)) %>%
+  group_by(cand_nm, contbr_occupation) %>%
+  summarise(record_num = n(), total = sum(contb_receipt_amt))
+
+ggplot(data = candidate_occupation_tb,
+       aes(x = cand_nm, y = total, fill = reorder(contbr_occupation,
+           desc(group_by(candidate_occupation_tb, cand_nm)$total)))) +
+  geom_bar(stat = "identity", position = position_dodge(), colour = "black") +
+  scale_fill_discrete(name="Occupation") +
+  xlab('Candidate') +
+  ylab('Amount of Contribution by Top10 Occupation') +
+  theme(axis.title.x = element_text(size = 10)) +
+  theme(axis.title.y =element_text(size = 10)) +
+  ylim(min(candidate_occupation_tb$total, 0) * 1.2,
+       max(candidate_occupation_tb$total) * 1.2) +
+  #guides(fill = FALSE) +
+  ggtitle('The Amount of Contribution of Each Party by Occupation') +
+  theme(plot.title = element_text(hjust = 0.5, size = 12))
+```
+
+Observing the exact amount of donation to each party \
+(not consider "Others" party) made by top10 occupations mentioned before, \
+I found that all the people from differnt occupations donated more to \
+Democratic than to Republic. Furthermore, for Democratic party, the top three \
+donation occupations are retired people, attorneys and not-employed people; \
+however, for Republican party, retired people, honemakers and CEOs made \
+most contribution. What is worth to mention is that people \
+who were not employed donated 6166751.54 dollars to Democratic party \
+but only donoted 25632.18 dollars to Republican party. \
+What is interesting is that this situation happens to Hillary Clinton \
+(a comptetitive candidate from Democratic party) and Donald Trump \
+(a comptetitive candidate from Republican party).
+
+```{r echo = FALSE,  Multivariate_Plots2}
+
+#Contribution Distribution of Top5 Candidates by year (2015,2016)
+top5_candidate = contr_by_candidates_sum$cand_nm
+candidate_date_contribution = filter(CA_clean,
+                                     cand_nm %in% top5_candidate & 
+                                     contbr_year %in% c(2015, 2016)) 
+candidate_date_contribution$contbr_year = 
+  factor(candidate_date_contribution$contbr_year)
+
+candidate_date_contr_tb = filter(CA_clean,
+                                     cand_nm %in% top5_candidate & 
+                                     contbr_year %in% c(2015, 2016)) %>%
+  group_by(cand_nm, contbr_year) %>%
+  summarise(record_num = n(), total_contribution = sum(contb_receipt_amt))
+candidate_date_contr_tb$contbr_year = 
+  factor(candidate_date_contr_tb$contbr_year)
+
+#bar chart
+ggplot(aes(x = contbr_year, y = total_contribution / 1000, fill = cand_nm), 
+       data = candidate_date_contr_tb) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  scale_fill_discrete("Candidates") +
+  xlab("Year") +
+  ylab("Contribution Amount [thousand USD]") +
+  ggtitle("Contribution Amount of Top5 Candidates by Year")
+  
+#boxplot
+
+ggplot(aes(x = contbr_year, y = contb_receipt_amt, fill = cand_nm),
+       data = candidate_date_contribution) +
+  geom_boxplot() + 
+  scale_fill_discrete("Candidates") +
+  xlab("Year") +
+  ylab("Contribution Amount") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ggtitle("Contribution Distribution of Top5 Candidates by year") +
+  theme(plot.title = element_text(vjust = 0.5))
+
+```
+
+Although contribution records started in 2013 in dataset, they are still so  \
+few comparing to year 2015 and 2016. Therefore, I only focus on these two years \
+and drew a bar chart showing contribution amount of top 5 candidates by year \
+as well as a boxplot illustrating the contribution distribution of top 5 \
+candidates by year. I get following information:
+
+* All the candidates except Marco Rubio raised more money in 2016 than in 2015. 
+
+* Hillary Clinton got more than 3 times of donation in 2016 comparing with 2015, \
+which also happens to Donald Trump.
+
+* There are many outliners when considering the one-time contribution amount.
+
+* It seems that people who donated for Marco Rubio in 2015 are mush richer \
+than people who donated for other candidates.
+
+* People who made contribution came from different income-level groups.
+
+* People tend to contribute less money one time in 2016 than in 2015.
+
+```{r echo = FALSE,  Multivariate_Plots3}
+
+top5_candidate = contr_by_candidates_sum$cand_nm
+
+candidate_gender_contribution = filter(CA_clean,cand_nm %in% top5_candidate) %>%
+  group_by(cand_nm, gender) %>%
+  summarise(record_num = n(), total = sum(contb_receipt_amt))
+
+ggplot(data = candidate_gender_contribution,
+       aes(x = cand_nm, y = total, fill = reorder(gender,
+           desc(group_by(candidate_gender_contribution, cand_nm)$total)))) +
+  geom_bar(stat = "identity", position = position_dodge(), colour = "black") +
+  scale_fill_discrete(name="Gender") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.8, vjust = 0.8)) +
+  xlab('Candidate') +
+  ylab('Amount of Contribution by Gender') +
+  theme(axis.title.x = element_text(size = 10)) +
+  theme(axis.title.y =element_text(size = 10)) +
+  ylim(min(candidate_gender_contribution$total, 0) * 1.2,
+       max(candidate_gender_contribution$total) * 1.2) +
+  #guides(fill = FALSE) +
+  ggtitle('The Amount of Contribution of Top5 Candidates by Gender') +
+  theme(plot.title = element_text(hjust = 0.5, size = 12))
+
+
+```
+
+The bar chart above shows the amount of donation that top 5 candidates got by \
+female and male respectively. It is reasonable that only Hillary Cliton \
+got more donation from female than male even though generally males donated \
+more than females.
+
+# Multivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the \
+investigation. Were there features that strengthened each other in terms of \
+looking at your feature(s) of interest?
+
+* More big pocket donors supported Hillary Clinton when the election was going \
+to be closed.
+
+
+* The majority of not-employed people supported Democratic party, \
+and I speculated that they in fact surpported Hillary Clinton since most of \
+the donation to Democratic party was for her.
+
+
+* In California, people no matter from which occupation, tend to support \
+Democratic party, especially Hillary Clinton.
+
+
+### Were there any interesting or surprising interactions between features?
+
+For a certain period of time, Bernard Sanders received more donations and \
+gained more popularity than Hillary Clinton.
+
+# Final Plots and Summary
+
+### Plot One
+```{r echo=FALSE, Plot_One}
+# Plot density of the amount of contribution
+bks = seq(0,2700, 200)
+ggplot(aes(x = contb_receipt_amt), data = CA_clean) +
+  geom_density(color = "blue", fill = "blue") +
+  scale_x_continuous(breaks = bks) +
+  xlab("Contribution Amount") +
+  ylab("Desity") +
+  ggtitle('Density of the Contribution') +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+### Description One
+
+The graph above shows the contribution amount distribution, which is a \
+general picture of the whole dataset since the amount of contribution is \
+one of the main features that we should be concerned about. \
+We can see through the graph that most one-time contribution(or we can say \
+most of people's donation) is no more than 200 dollars.
+
+### Plot Two
+```{r echo=FALSE, Plot_Two}
+# pie chart for "The Percentage of Contribution Amount by Party"
+myLabel = as.vector(contr_by_party$cand_party)   
+myLabel = paste(myLabel, "(", round(contr_by_party$sum_contr_party / sum(contr_by_party$sum_contr_party) * 100, 2), "%)", sep = "")   
+
+ggplot(aes(x = "", y = sum_contr_party, fill = cand_party),
+       data = contr_by_party) +
+  geom_bar(stat = "identity", width = 1) +    
+  coord_polar(theta = "y") + 
+  labs(x = "", y = "", title = "") + 
+  theme(axis.ticks = element_blank()) + 
+  scale_fill_discrete(name = "Party",
+                      breaks = contr_by_party$cand_party, labels = myLabel) + 
+  theme(axis.text.x = element_blank()) +
+  ggtitle("The Percentage of Contribution Amount by Party")
+```
+
+### Description Two
+
+The bie chart above illustrates the percentage of total donation that \
+each party got. It is not surprising that in California, Democratic party \
+took the majority of the donation, accounting for 74.86% of the total, \
+while Republican party only raised 24.31% of the total donation.
+
+### Plot Three
+```{r echo=FALSE, Plot_Three}
+# bar chart for "The Amount of Contribution of Each Party by Occupation"
+candidate_occupation_tb = filter(CA_clean,
+                                 cand_nm %in% c("Clinton, Hillary Rodham",
+                                                "Trump, Donald J.",
+                                                "Sanders, Bernard") &
+                                 (contbr_occupation %in% top10_occupation)) %>%
+  group_by(cand_nm, contbr_occupation) %>%
+  summarize(record_num = n(), total = sum(contb_receipt_amt))
+
+ggplot(data = candidate_occupation_tb,
+       aes(x = cand_nm, y = total, fill = reorder(contbr_occupation, desc(group_by(candidate_occupation_tb, cand_nm)$total)))) +
+  #geom_bar(stat = "identity", colour = "black") +
+  geom_bar(stat = "identity", position = position_dodge(), colour = "black") +
+  scale_fill_discrete(name="Occupation") +
+  xlab('Candidate') +
+  ylab('Amount of Contribution [USD] by Top10 Occupation') +
+  theme(axis.title.x = element_text(size = 10)) +
+  theme(axis.title.y =element_text(size = 10)) +
+  ylim(min(candidate_occupation_tb$total, 0) * 1.2, 
+       max(candidate_occupation_tb$total) * 1.2) +
+  #guides(fill = FALSE) +
+  ggtitle('The Amount of Contribution of Each Party by Occupation') +
+  theme(plot.title = element_text(hjust = 0.5, size = 12))
+
+```
+
+### Description Three
+
+The bar chart above illustrates the amount of donation for Hillary Clinton, \
+Bernard Sanders and Donald Trump by top 10 occupations. Retired people \
+contributed most to the presidential election, both Hillary Clinton and \
+Donald Trump got the majority of donation from them. Apart from retired people, \
+attorneys and homemakers also donated a large amount of money to \
+Hillary Clinton; however, the money that Donald Trump rasied mostly \
+comes from CEOs and presidents. What is worth to mention is that \
+not-employed people donated second most amount of donation amont all the \
+occupations, and most of them to Bernard Sanders. 
+
+------
+
+# Reflection
+##Challenges and Struggles
+
+During this project, my challenges and struggles are as follows:
+
+
+* I removed some contributions that exceed $2700 or are negative becasue of \
+the "Contributes Limits" on website.
+
+
+* The original dataset did not provide donors' gender information; \
+however intuitively, the gender of donors and candidates can influence the \
+contribution in some degree. Therefore, I applyed R's gender package to \
+predict gender of donors by their first name.
+
+
+* Sometimes, to make the graphs look beautiful and clear, I need to search \
+many extra functions that our course may not mention.
+
+##Success
+
+* The ggplot2 and dplyr packages are the most important packages for this \
+project. I also learned gender package and lubridate package that \
+I think is useful.
+
+
+* I am new to R, so through this project, I learned a lot of new things \
+including draw statistical graphs and charts by R, and I also gain experience \
+of exploring potential knowledge from dataset. 
+
+##Conclusion
+
+By exploring California financial donation data, I found several interesting \
+characteristics:
+
+
+* There is no doubt that California is one of the bluest states.
+
+
+* Only few candidates raised the most donations.
+
+
+* Female tend to donate more to candidates from Democratic party, \
+especially female candidate.
+
+
+* Retired people are the largest contribution group, followed by people \
+who were not employed, attorneys.
+
+
+* Los Angeles, San Francisco and San Diego are the top 3 cities that \
+contributed most amount of money.
+
+
+* Bernard Sanders gained the majority of the not-employed people's donation.
+
+
+* Hillary Clinton got the most of the total donation in California.
+
+##Furture Work
+
+My analysis is based on a state -- California; however it would be interesting \
+and get more insights if exploring data based on candidates.I saw the dataset \
+based on candidates, by which I could investigate people's support distribution \
+from different states. For example, analysis of swing states such as \
+Ohio and Florida must be beneficial to explore the reason why Donald Trump \
+beat Hillary Cliton in the end.
+
+
+Though the election is over, Americans have seen the post-election surge (https://www.theatlantic.com/business/archive/2016/11/donald-trump-donations/507668/) \
+in donations. There will be more useful financial contribution data to analyze.
